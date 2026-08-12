@@ -1,0 +1,19 @@
+[build-system]
+requires      = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name        = "weight-poisoning-detector"
+version     = "1.0.0"
+description = "Detects backdoors and trojans in model weight files"
+requires-python = ">=3.10"
+dependencies = ["torch>=2.0.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0.0"]
+
+# Only the `detector` package is published. The top-level scanner.py CLI is
+# excluded: pickle-scanner publishes a `scanner` package, and shipping both
+# would make `import scanner` ambiguous when the two are installed together.
+[tool.setuptools]
+packages = ["detector"]

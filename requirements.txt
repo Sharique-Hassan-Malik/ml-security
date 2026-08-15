@@ -1,0 +1,6 @@
+# The platform and the pickle scanner need nothing beyond the standard library.
+# Everything below is for the modules that analyse or attack real models.
+torch>=2.0
+numpy
+pillow>=9      # gradient-leakage embeds reconstructions in its HTML report
+pytest>=7

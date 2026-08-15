@@ -35,7 +35,7 @@ from .rgap import AttackNotApplicable, RGAPAttack
 MODULE_NAME = "gradient-leakage"
 
 __all__ = [
-    "MODULE_NAME", "LeNet5", "DefenceRun", "run_leakage",
+    "MODULE_NAME", "LeNet5", "DefenceRun", "run_leakage", "synthetic_image",
     "AttackConfig", "AttackResult", "GradientInversionAttack",
     "compute_observed_gradients", "RGAPAttack", "AttackNotApplicable",
     "DifferentialPrivacyDefense", "GradientCompressionDefense",
@@ -64,6 +64,40 @@ class LeNet5(nn.Module):
         x = self.features(x)
         x = x.view(x.size(0), -1)
         return self.classifier(x)
+
+
+def synthetic_image(size: int = 32, seed: int = 0) -> torch.Tensor:
+    """A structured stand-in for a private training image.
+
+    Uniform noise is the wrong subject to attack. It has no structure to
+    recover, the total-variation term in the objective actively fights it, and
+    the resulting PSNR is near-constant across defences — so the experiment
+    cannot distinguish a defence that works from one that does nothing. A few
+    coloured regions and a disc give the attack something recoverable and make
+    the metric mean what it claims.
+    """
+    generator = torch.Generator().manual_seed(seed)
+    image = torch.zeros(3, size, size)
+
+    half = size // 2
+    image[0, :half, :half] = 0.85          # red quadrant
+    image[1, :half, half:] = 0.70          # green quadrant
+    image[2, half:, :half] = 0.80          # blue quadrant
+    image[:, half:, half:] = 0.30          # grey quadrant
+
+    ys, xs = torch.meshgrid(
+        torch.arange(size, dtype=torch.float32),
+        torch.arange(size, dtype=torch.float32),
+        indexing="ij",
+    )
+    disc = ((ys - size / 2) ** 2 + (xs - size / 2) ** 2) <= (size / 4) ** 2
+    image[0][disc] = 0.95
+    image[1][disc] = 0.95
+    image[2][disc] = 0.20
+
+    # A little texture, so the reconstruction cannot win by producing flat fills.
+    image += 0.03 * torch.randn(3, size, size, generator=generator)
+    return image.clamp(0, 1).unsqueeze(0)
 
 
 @dataclass
@@ -114,7 +148,7 @@ def run_leakage(
     torch.manual_seed(seed)
 
     model = model if model is not None else LeNet5(num_classes=10)
-    real_data = data if data is not None else torch.rand(1, 3, 32, 32)
+    real_data = data if data is not None else synthetic_image(seed=seed)
     real_labels = labels if labels is not None else torch.tensor([3])
 
     criterion = nn.CrossEntropyLoss()

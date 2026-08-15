@@ -211,9 +211,15 @@ class TestReport:
 
 class TestRendering:
     def test_html_is_self_contained(self, malicious_pickle):
+        """No resource the page would have to fetch to render.
+
+        `xmlns="http://www.w3.org/2000/svg"` is a namespace identifier, not a
+        URL anything loads — so the check is for actual resource references.
+        """
         html = render_html(runner.scan([malicious_pickle]))
-        for forbidden in ("http://", "https://", "<script"):
-            assert forbidden not in html, f"report reaches out to {forbidden}"
+        for forbidden in ('src="http', "src='http", 'href="http', "href='http",
+                          "url(http", "@import", "<script", "<iframe"):
+            assert forbidden not in html, f"report would fetch: {forbidden}"
 
     def test_html_defines_both_themes(self, malicious_pickle):
         html = render_html(runner.scan([malicious_pickle]))

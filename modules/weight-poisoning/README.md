@@ -110,20 +110,6 @@ python tests/generate_fixtures.py
 pytest tests/ -v
 ```
 
----
-
-## Limitations
-
-- Pure static analysis — cannot detect attacks that leave no weight-level
-  signature (e.g., clean-label attacks without weight alteration).
-- Thresholds were calibrated on standard ImageNet-pretrained architectures;
-  unusual architectures (binary networks, very small models) may produce
-  higher false-positive rates.
-- Very large layers (> 4M parameters) are skipped by the spectral analyzer
-  due to SVD cost; consider chunking such layers separately.
-
----
-
 ## References
 
 - Chen et al. (2017) *Targeted Backdoor Attacks on Deep Learning Systems*

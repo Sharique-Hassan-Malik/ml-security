@@ -139,3 +139,21 @@ pytest modules/pickle-scanner       # one module
 ## Licence
 
 MIT — see [LICENSE](LICENSE).
+
+## Scope and responsible use
+
+Three of these modules are attack tooling: `model-extraction`,
+`gradient-leakage` and the attack half of `adversarial-detection`. They exist
+to quantify an exposure you own — how many queries buy a usable copy of your
+model, how much of a training input a shared gradient leaks.
+
+- **Run them only against models and data you own or are explicitly authorised
+  to test.** Extracting a model you do not own may breach the operator's terms
+  of service and applicable law.
+- The scanners (`pickle-scanner`, `weight-poisoning`) and the guards
+  (`prompt-injection-firewall`, `adversarial-detection`) are defensive and
+  operate on artifacts you supply.
+- No module targets a named third-party service, and none ships credentials,
+  a bypass for a commercial product, or a way around an access control.
+- Provided **as is**, under the [LICENSE](LICENSE). You are responsible for
+  having authorisation before running any of it.

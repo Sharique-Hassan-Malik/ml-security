@@ -8,7 +8,7 @@ more benign requests to be wrong about.
 
 `operating_point()` computes that explicitly, so the choice of threshold is made
 against the traffic mix the firewall will actually see rather than against the
-corpus it was tuned on. This is the same correction `drift-detector` (#7) needed
+corpus it was tuned on. This is the same correction `drift` needed
 for the same reason.
 """
 

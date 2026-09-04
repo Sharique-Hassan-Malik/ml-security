@@ -1,8 +1,8 @@
 # Architecture
 
-Six tools that used to be six projects, joined by one contract. This document
-is about the contract and the decisions behind it; each module's own analysis
-is documented in [`docs/`](docs).
+Six modules joined by one contract. This document is about the contract and the
+decisions behind it; each module's own analysis is documented in
+[`docs/`](docs).
 
 ## The shape
 
@@ -57,9 +57,10 @@ first and the mismatch is reported as a skip:
 
 `SAFE < INFO < LOW < MEDIUM < HIGH < CRITICAL`, ordered and comparable, so
 `finding.severity >= Severity.HIGH` means the same thing in a bytecode scanner
-and in a gradient-inversion probe. Before the merge there were three scales:
-strings `"low"/"medium"/"high"`, a float in [0,1], and an enum. Findings could
-not be compared across tools, which meant no single verdict was possible.
+and in a gradient-inversion probe. The alternative is what these tools reach
+for individually — strings `"low"/"medium"/"high"` in one, a float in [0,1] in
+another, an enum in a third — and findings that cannot be compared across tools
+make a single verdict impossible.
 
 The report's verdict is the **worst** severity present, never an average.
 Averaging is how one CRITICAL finding gets diluted by nine clean checks into

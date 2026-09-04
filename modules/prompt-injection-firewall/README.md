@@ -7,7 +7,7 @@
 An LLM-layer WAF: injection and jailbreak detection, tool-call allowlisting,
 output exfiltration filtering, and an attack corpus with precision/recall —
 evaluated the way `adversarial-detection` evaluates its detectors, and with the
-base-rate correction `drift-detector` needed.
+base-rate correction `drift` needed.
 
 ---
 
@@ -181,8 +181,8 @@ Python 3.10+, standard library only.
 ## Related
 
 `web-application-firewall` (the HTTP-layer ancestor), `adversarial-detection`
-(the evaluation method), `drift-detector` (the base-rate correction), and
-`rag-pipeline` — whose retrieved documents are exactly the indirect-injection
+(the evaluation method), `drift` (the base-rate correction), and
+`rag` — whose retrieved documents are exactly the indirect-injection
 channel this defends.
 
 ## License

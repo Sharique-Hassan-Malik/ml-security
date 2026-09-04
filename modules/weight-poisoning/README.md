@@ -66,7 +66,7 @@ Cross-layer correlation:
 ```bash
 pip install torch
 git clone <repo>
-cd weight-poisoning-detector
+cd weight-poisoning
 ```
 
 ---

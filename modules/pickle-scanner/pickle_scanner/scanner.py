@@ -48,6 +48,15 @@ def scan_file(path: str | Path, strict: bool = False) -> list[ModuleResult]:
             continue
 
         _consume(parser, payload.data, result, strict)
+        if result.error and payload.heuristic:
+            # Only the opening bytes suggested this member was a pickle, and it
+            # did not parse — so it was not one. A PyTorch checkpoint stores its
+            # tensors as raw floats, and reporting those as a malformed pickle
+            # makes any caller that fails closed on errors reject a genuine
+            # model. Recorded as skipped, never dropped: a member the scanner
+            # did not read has to stay visible.
+            result.skipped = f"not a pickle after all ({result.error})"
+            result.error = ""
         results.append(result)
 
     return results

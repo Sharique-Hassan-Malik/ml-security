@@ -23,6 +23,11 @@ from pathlib import Path
 class Payload:
     source:  str    # human-readable description of where this payload came from
     data:    bytes
+    #: True when nothing about the file said "pickle" except its first bytes.
+    #: A payload found this way that then fails to parse is a heuristic that
+    #: misfired, not a malformed pickle, and callers must be able to tell the
+    #: two apart — one is noise, the other is a file refusing to be read.
+    heuristic: bool = False
 
 
 # Pickle protocol 2+ starts with \x80\x02 or higher; protocol 0/1 starts
@@ -42,8 +47,20 @@ def _looks_like_pickle(data: bytes) -> bool:
 
 
 def _looks_like_pickle_loose(data: bytes) -> bool:
-    """More lenient check — any file that contains 0x80 (PROTO) near the start."""
-    return b"\x80" in data[:4]
+    """More lenient check — a PROTO opcode near the start of the file.
+
+    PROTO is `0x80` followed by the protocol version, and pickle has only ever
+    had versions 0-5. Both bytes are checked, because a lone `0x80` is not a
+    signal: a PyTorch checkpoint stores its tensors as raw little-endian floats
+    in `data/<n>`, and one in every ~64 of those blobs begins with a `0x80`
+    inside the first four bytes by chance. Matching on that alone hands the
+    parser a wall of random bytes, which fails and is then reported as an
+    unparseable payload — a scanner that calls one in fifty genuine checkpoints
+    suspicious is a scanner that gets switched off.
+    """
+    window = data[:5]
+    return any(window[i] == 0x80 and i + 1 < len(window) and window[i + 1] <= 5
+               for i in range(min(4, len(window))))
 
 
 def extract_payloads(path: str) -> list[Payload]:
@@ -87,6 +104,7 @@ def _extract_from_zip(path: str, data: bytes) -> list[Payload]:
                             payloads.append(Payload(
                                 source=f"{path}::{member} (heuristic pickle detection)",
                                 data=raw,
+                                heuristic=True,
                             ))
                     except Exception:
                         pass

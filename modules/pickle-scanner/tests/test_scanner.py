@@ -8,9 +8,11 @@ Run with:
     python -m pytest tests/test_scanner.py -v
 """
 
+import io
 import pickle
 import struct
 import sys
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -20,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from pickle_scanner.opcodes import Severity
 from pickle_scanner.parser import PickleParser, ParseError
-from pickle_scanner.scanner import scan_bytes
+from pickle_scanner.scanner import scan_bytes, scan_file
 
 
 # ---------------------------------------------------------------------------
@@ -229,3 +231,78 @@ class TestSeverityOrdering:
     def test_max_severity_empty(self):
         result = scan_bytes(pickle.dumps(1, 2))
         assert result.max_severity in (Severity.SAFE, Severity.INFO)
+
+
+# ---------------------------------------------------------------------------
+# Container extraction
+# ---------------------------------------------------------------------------
+
+class TestZipExtraction:
+    """A `.pt` is a ZIP: one pickle plus one raw blob per tensor.
+
+    The blobs are little-endian floats, and treating one as a pickle because a
+    `0x80` byte happened to land near its start produces a parse error on a
+    perfectly good checkpoint. A caller that fails closed on parse errors — a
+    promotion gate, say — then refuses a genuine model roughly one time in
+    fifty, which is how a security control ends up switched off.
+    """
+
+    def _zip_of(self, members: dict) -> bytes:
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            for name, payload in members.items():
+                zf.writestr(name, payload)
+        return buf.getvalue()
+
+    def _scan(self, tmp_path, members: dict):
+        path = tmp_path / "model.pt"
+        path.write_bytes(self._zip_of(members))
+        return scan_file(str(path))
+
+    def test_a_tensor_blob_starting_with_0x80_is_not_a_pickle(self, tmp_path):
+        # 0x80 at offset 0, followed by 0xBF — PROTO with version 191, which
+        # pickle has never had. Real floats: struct.pack("<f", -1.4917e-38).
+        blob = b"\x80\xbf\x00\x00" + struct.pack("<4f", 1.5, -2.25, 0.0, 7.5)
+        results = self._scan(tmp_path, {"model/data.pkl": pickle.dumps({"w": 1}, 2),
+                                        "model/data/0": blob})
+        assert len(results) == 1, [r.module for r in results]
+        assert not results[0].error
+
+    def test_every_protocol_version_byte_still_matches(self, tmp_path):
+        for version in range(6):
+            blob = b"\x80" + bytes([version]) + b"K\x01."
+            results = self._scan(tmp_path, {"model/data/0": blob})
+            assert len(results) == 1, f"protocol {version} went undetected"
+
+    def test_a_real_pickle_under_a_data_name_is_still_found(self, tmp_path):
+        """The heuristic exists for payloads hidden under an innocent name."""
+        hidden = b"\x80\x02cos\nsystem\n(X\x02\x00\x00\x00idtR."
+        results = self._scan(tmp_path, {"model/data/0": hidden})
+        assert len(results) == 1
+        assert results[0].max_severity >= Severity.HIGH
+
+    def test_the_blob_is_skipped_without_hiding_the_pickle_beside_it(self, tmp_path):
+        malicious = b"\x80\x02cos\nsystem\n(X\x02\x00\x00\x00idtR."
+        blob = b"\x80\xbf\x00\x00" + struct.pack("<4f", 1.5, -2.25, 0.0, 7.5)
+        results = self._scan(tmp_path, {"model/data.pkl": malicious,
+                                        "model/data/0": blob})
+        assert len(results) == 1
+        assert results[0].max_severity >= Severity.HIGH
+
+    def test_a_blob_that_survives_the_heuristic_is_skipped_not_errored(self, tmp_path):
+        """0x80 0x02 is a valid PROTO, so no opening-byte check can rule this
+        out — the parse is what settles it. Failing there means the heuristic
+        misfired, and a caller that fails closed on `error` must not see one."""
+        blob = b"\x80\x02" + struct.pack("<8f", *(1.5, -2.25, 0.0, 7.5) * 2)
+        results = self._scan(tmp_path, {"model/data/0": blob})
+        assert len(results) == 1
+        assert not results[0].error
+        assert results[0].skipped and "not a pickle" in results[0].skipped
+
+    def test_a_declared_pickle_that_will_not_parse_still_errors(self, tmp_path):
+        """Nothing above may soften this case: a member named `.pkl` that the
+        parser chokes on is a file refusing to be read, and a gate that lets it
+        through has not scanned it."""
+        results = self._scan(tmp_path, {"model/data.pkl": b"\x80\x02\xd8\xd8\xd8."})
+        assert len(results) == 1
+        assert results[0].error
